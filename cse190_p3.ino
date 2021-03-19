@@ -191,11 +191,7 @@ int main(void) {
   bma250_init(); 
   timer3_init();
   ble_setup();
-    /*
-    * aci_hal_device_standby() puts the device into standy mode initially. This is because there is no need to transmit data
-    * if the device has not yet fallen and hence lost. For security reasons it prevents others from connecting and tracking your device when it is not lost. 
-    */
-  aci_hal_device_standby();   
+  aci_hal_device_standby();     // Put BlueTooth into standby mode, no need to transmit if not lost
   /* ======================================================= */
 
   bool fallen = false;
@@ -203,14 +199,24 @@ int main(void) {
   timer3_set(20);   // Activate acceleration of device check every 20 milliseconds 
   
   while(true){
-    
+
+    /*
+     * Sleeping for the CPU to idle mode depends on these commands: 
+     * SCR.SLEEPDEEP = 0; this is set to 0 (default so no need to change) 
+     *  SLEEP.IDLE=Level; this is set to 0 
+     *  WFI; this activates the wait for enable interrupt 
+     * 
+     */
+    PM -> SLEEP.bit.IDLE = 0;
+     __WFI();  
+     
     if(timerFallCheck){   // Timer activated boolean to check for the fall
       timerFallCheck = false; 
       if(detectFall() ){
         fallen = true;
         timer3_set(1000);   // Initiate time elapsed since drop
-        delay(1000);
-        printf("\n Device has fallen \n"); // Secondary notification of fall state
+        //delay(1000);
+        //printf("\n Device has fallen \n"); // Secondary notification of fall state
         globalCount = 0; // Reset timers for printing out the message to BlueTooth device
         timeElapsed = 0;
       }
@@ -226,14 +232,6 @@ int main(void) {
       
       if(found){    // If it is found, deactivate 'found' mode and stop BlueTooth advertisement packets
         fallen = false;
-          /*
-          * aci_gap_set_non_discoverable() is called in order to disable advertising packets and additionally put the device into standby mode. 
-          * This is for added security so others cannot connect. 
-          * Most importantly, it can be called while connected to another device (such as a phone) unlike the aci_hal_device_standy() command
-          * which gives an error 
-          * Secondly, the device is set to discoverable mode when ble_serial_send_data() function is called as it calls ble_loop() function which
-          * sets the device to be discoverable oncemore. This happens only when the device is dropped again (when timerFallCheck boolean is activated above)
-          */
         aci_gap_set_non_discoverable(); // Disables communication
         timer3_set(20);         // Prep timer for accelerometer checking phase
       }
